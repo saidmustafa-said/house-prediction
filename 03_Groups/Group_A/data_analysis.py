@@ -1,20 +1,26 @@
 """
-GROUP A - Data Collection and Exploration
-This script analyzes the House Prices dataset to understand its structure,
-features, and the prediction problem.
+GROUP A - Data Collection, Exploration & Cleaning
+This script:
+1. Loads the House Prices dataset from Kaggle
+2. Analyzes the data structure
+3. Cleans data (removes nulls, handles missing values)
+4. Saves cleaned data for Group B to use
 """
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
-# Load the dataset
+# Create output directory if it doesn't exist
+os.makedirs('02_Data/processed', exist_ok=True)
+
 print("=" * 80)
-print("GROUP A: DEFINE OBJECTIVE AND COLLECT DATA")
+print("GROUP A: DATA COLLECTION, EXPLORATION & CLEANING")
 print("=" * 80)
 
-# Load training data from new structure
+# Load training data from raw folder
 train_data = pd.read_csv('02_Data/raw/train.csv')
 test_data = pd.read_csv('02_Data/raw/test.csv')
 
@@ -32,7 +38,7 @@ print("\n3. DATA TYPES")
 print("-" * 80)
 print(train_data.dtypes)
 
-print("\n4. MISSING VALUES")
+print("\n4. MISSING VALUES ANALYSIS")
 print("-" * 80)
 missing = train_data.isnull().sum()
 missing_percent = (missing / len(train_data)) * 100
@@ -161,3 +167,77 @@ plt.tight_layout()
 plt.savefig('04_Outputs/visualizations/Group_A_Data_Analysis.png',
             dpi=300, bbox_inches='tight')
 print("\n✓ Visualization saved as '04_Outputs/visualizations/Group_A_Data_Analysis.png'")
+
+print("\n" + "=" * 80)
+print("DATA CLEANING & PREPARATION")
+print("=" * 80)
+
+# Clean training data
+print("\n6. CLEANING TRAINING DATA")
+print("-" * 80)
+
+# Make a copy for cleaning
+train_cleaned = train_data.copy()
+
+# Handle missing values
+print("Handling missing values...")
+for col in train_cleaned.columns:
+    if train_cleaned[col].isnull().sum() > 0:
+        if train_cleaned[col].dtype in ['float64', 'int64']:
+            # Fill numerical columns with median
+            train_cleaned[col].fillna(
+                train_cleaned[col].median(), inplace=True)
+        else:
+            # Fill categorical columns with mode
+            train_cleaned[col].fillna(
+                train_cleaned[col].mode()[0], inplace=True)
+
+print(f"✓ Missing values handled")
+print(f"  Remaining nulls: {train_cleaned.isnull().sum().sum()}")
+
+# Remove duplicates
+initial_rows = len(train_cleaned)
+train_cleaned = train_cleaned.drop_duplicates()
+print(
+    f"✓ Duplicates removed: {initial_rows - len(train_cleaned)} rows removed")
+
+# Remove rows with invalid SalePrice
+train_cleaned = train_cleaned[train_cleaned['SalePrice'] > 0]
+print(f"✓ Invalid prices removed")
+
+print(f"\nCleaned training data shape: {train_cleaned.shape}")
+
+# Clean test data
+print("\n7. CLEANING TEST DATA")
+print("-" * 80)
+
+test_cleaned = test_data.copy()
+
+# Handle missing values in test data
+for col in test_cleaned.columns:
+    if test_cleaned[col].isnull().sum() > 0:
+        if test_cleaned[col].dtype in ['float64', 'int64']:
+            test_cleaned[col].fillna(test_cleaned[col].median(), inplace=True)
+        else:
+            test_cleaned[col].fillna(test_cleaned[col].mode()[0], inplace=True)
+
+print(f"✓ Missing values handled")
+print(f"  Remaining nulls: {test_cleaned.isnull().sum().sum()}")
+
+# Remove duplicates
+initial_rows = len(test_cleaned)
+test_cleaned = test_cleaned.drop_duplicates()
+print(f"✓ Duplicates removed: {initial_rows - len(test_cleaned)} rows removed")
+
+print(f"\nCleaned test data shape: {test_cleaned.shape}")
+
+# Save cleaned data for Group B
+print("\n8. SAVING CLEANED DATA")
+print("-" * 80)
+
+train_cleaned.to_csv('02_Data/processed/train_cleaned.csv', index=False)
+test_cleaned.to_csv('02_Data/processed/test_cleaned.csv', index=False)
+
+print(f"✓ Cleaned training data saved: 02_Data/processed/train_cleaned.csv")
+print(f"✓ Cleaned test data saved: 02_Data/processed/test_cleaned.csv")
+print(f"\n✓ Data is ready for Group B (Data Preparation)")

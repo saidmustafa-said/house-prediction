@@ -1,13 +1,17 @@
 """
 GROUP D - Predict and Visualize Results
-This script creates visualizations and analyzes patterns in the House Prices dataset
-to demonstrate how ML results are interpreted and visualized.
+This script:
+1. Loads the trained model from Group C
+2. Makes predictions on test data
+3. Visualizes results and insights
 """
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pickle
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -15,14 +19,43 @@ print("=" * 80)
 print("GROUP D: PREDICT AND VISUALIZE RESULTS")
 print("=" * 80)
 
-# Load data from new structure
+print("\n1. LOADING TRAINED MODEL AND DATA")
+print("-" * 80)
+
+# Load prepared data from Group B
+try:
+    X_train = pd.read_csv('02_Data/processed/X_train_prepared.csv')
+    X_test = pd.read_csv('02_Data/processed/X_test_prepared.csv')
+    y_train = pd.read_csv('02_Data/processed/y_train.csv').squeeze()
+
+    print("✓ Loaded prepared data")
+except FileNotFoundError:
+    print("⚠ Prepared data not found. Please run Groups A and B first!")
+    exit(1)
+
+# Load trained model
+try:
+    with open('02_Data/processed/model_trained.pkl', 'rb') as f:
+        model = pickle.load(f)
+    print("✓ Loaded trained model")
+except FileNotFoundError:
+    print("⚠ Trained model not found. Please run Group C first!")
+    exit(1)
+
+# Make predictions
+print("\n2. MAKING PREDICTIONS")
+print("-" * 80)
+
+y_pred_train = model.predict(X_train)
+y_pred_test = model.predict(X_test)
+
+print(f"✓ Predictions made on training data: {len(y_pred_train)} samples")
+print(f"✓ Predictions made on test data: {len(y_pred_test)} samples")
+
+# Load original data for context
 train_data = pd.read_csv('02_Data/raw/train.csv')
 
-print("\n1. DATASET OVERVIEW FOR VISUALIZATION")
-print("-" * 80)
-print(f"Dataset shape: {train_data.shape}")
-print(
-    f"Columns: {list(train_data.columns[:10])}... and {len(train_data.columns) - 10} more")
+print(f"\nDataset shape: {train_data.shape}")
 print(f"Total samples: {len(train_data)}")
 
 print("\n2. VISUALIZATION 1: AVERAGE HOUSE PRICES BY NEIGHBORHOOD")
@@ -229,36 +262,52 @@ print("""
 fig = plt.figure(figsize=(16, 12))
 gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
 
-# Plot 1: Average prices by neighborhood
+# Plot 1: Actual vs Predicted Prices (Training Set)
 ax1 = fig.add_subplot(gs[0, :2])
-neighborhood_prices.head(10)['mean'].plot(
-    kind='barh', ax=ax1, color='skyblue', edgecolor='black')
-ax1.set_title('Top 10 Most Expensive Neighborhoods',
+sample_indices = np.random.choice(
+    len(y_train), min(200, len(y_train)), replace=False)
+ax1.scatter(y_train.iloc[sample_indices], y_pred_train[sample_indices],
+            alpha=0.6, s=30, color='blue', label='Predictions')
+min_val = min(y_train.min(), y_pred_train.min())
+max_val = max(y_train.max(), y_pred_train.max())
+ax1.plot([min_val, max_val], [min_val, max_val], 'r--',
+         linewidth=2, label='Perfect Prediction')
+ax1.set_title('Model Predictions vs Actual Prices (Training Set)',
               fontsize=12, fontweight='bold')
-ax1.set_xlabel('Average Sale Price ($)')
+ax1.set_xlabel('Actual Price ($)')
+ax1.set_ylabel('Predicted Price ($)')
+ax1.legend()
+ax1.grid(True, alpha=0.3)
 
-# Plot 2: House style distribution
+# Plot 2: Prediction Error Distribution
 ax2 = fig.add_subplot(gs[0, 2])
-style_dist.plot(kind='pie', ax=ax2, autopct='%1.1f%%', colors=[
-                'lightblue', 'lightgreen', 'lightcoral', 'lightyellow', 'lightpink', 'lightgray'])
-ax2.set_title('House Style Distribution', fontsize=12, fontweight='bold')
-ax2.set_ylabel('')
+errors = y_pred_train - y_train.values
+ax2.hist(errors, bins=50, color='coral', edgecolor='black')
+ax2.set_title('Prediction Error Distribution', fontsize=12, fontweight='bold')
+ax2.set_xlabel('Error ($)')
+ax2.set_ylabel('Frequency')
+ax2.axvline(x=0, color='red', linestyle='--', linewidth=2)
 
-# Plot 3: Price vs Living Area
+# Plot 3: Price vs Living Area (with predictions)
 ax3 = fig.add_subplot(gs[1, :2])
 ax3.scatter(train_data['GrLivArea'],
-            train_data['SalePrice'], alpha=0.5, s=20, color='blue')
+            train_data['SalePrice'], alpha=0.5, s=20, color='blue', label='Actual')
 ax3.set_title('Price vs Living Area', fontsize=12, fontweight='bold')
 ax3.set_xlabel('Above Grade Living Area (sq ft)')
 ax3.set_ylabel('Sale Price ($)')
 ax3.grid(True, alpha=0.3)
+ax3.legend()
 
 # Plot 4: Price distribution
 ax4 = fig.add_subplot(gs[1, 2])
-ax4.hist(train_data['SalePrice'], bins=50, color='coral', edgecolor='black')
+ax4.hist(train_data['SalePrice'], bins=50, color='coral',
+         edgecolor='black', alpha=0.7, label='Actual')
+ax4.hist(y_pred_train, bins=50, color='green',
+         edgecolor='black', alpha=0.5, label='Predicted')
 ax4.set_title('Price Distribution', fontsize=12, fontweight='bold')
 ax4.set_xlabel('Sale Price ($)')
 ax4.set_ylabel('Frequency')
+ax4.legend()
 
 # Plot 5: Price by year built
 ax5 = fig.add_subplot(gs[2, 0])

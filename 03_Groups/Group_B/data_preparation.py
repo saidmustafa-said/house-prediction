@@ -1,14 +1,18 @@
 """
 GROUP B - Data Preparation and Algorithm Selection
-This script demonstrates data cleaning, preprocessing, and model selection
-for the House Prices prediction problem.
+This script:
+1. Loads cleaned data from Group A
+2. Encodes categorical variables
+3. Normalizes numerical features
+4. Saves prepared data for Group C (Model Training)
 """
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import pickle
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -16,78 +20,82 @@ print("=" * 80)
 print("GROUP B: PREPARE DATA AND SELECT ALGORITHM")
 print("=" * 80)
 
-# Load data from new structure
-train_data = pd.read_csv('02_Data/raw/train.csv')
-test_data = pd.read_csv('02_Data/raw/test.csv')
+# Create output directory if it doesn't exist
+os.makedirs('02_Data/processed', exist_ok=True)
 
-print("\n1. INITIAL DATA INSPECTION")
+print("\n1. LOADING CLEANED DATA FROM GROUP A")
 print("-" * 80)
-print(f"Training set shape: {train_data.shape}")
-print(
-    f"Missing values:\n{train_data.isnull().sum().sum()} total missing values")
+
+# Load cleaned data from Group A
+try:
+    train_data = pd.read_csv('02_Data/processed/train_cleaned.csv')
+    test_data = pd.read_csv('02_Data/processed/test_cleaned.csv')
+    print("✓ Loaded cleaned data from Group A")
+except FileNotFoundError:
+    print("⚠ Cleaned data not found. Using raw data instead...")
+    train_data = pd.read_csv('02_Data/raw/train.csv')
+    test_data = pd.read_csv('02_Data/raw/test.csv')
+
+print(f"Training data shape: {train_data.shape}")
+print(f"Test data shape: {test_data.shape}")
 
 # Separate features and target
-X = train_data.drop('SalePrice', axis=1)
-y = train_data['SalePrice']
+X_train = train_data.drop('SalePrice', axis=1)
+y_train = train_data['SalePrice']
+X_test = test_data.copy()
 
-print("\n2. HANDLING MISSING VALUES")
+print(f"\nFeatures shape: {X_train.shape}")
+print(f"Target shape: {y_train.shape}")
+
+print("\n2. ENCODING CATEGORICAL VARIABLES")
 print("-" * 80)
 
-# Strategy: Drop columns with >20% missing, fill others with median/mode
-missing_percent = (X.isnull().sum() / len(X)) * 100
-cols_to_drop = missing_percent[missing_percent > 20].index.tolist()
-print(f"Dropping {len(cols_to_drop)} columns with >20% missing values:")
-for col in cols_to_drop:
-    print(f"  - {col}: {missing_percent[col]:.1f}% missing")
+# Identify categorical and numerical columns
+categorical_cols = X_train.select_dtypes(include=['object']).columns.tolist()
+numerical_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
 
-X = X.drop(cols_to_drop, axis=1)
-
-# Fill remaining missing values
-numerical_cols = X.select_dtypes(include=[np.number]).columns
-categorical_cols = X.select_dtypes(include=['object']).columns
-
-X[numerical_cols] = X[numerical_cols].fillna(X[numerical_cols].median())
-X[categorical_cols] = X[categorical_cols].fillna(
-    X[categorical_cols].mode().iloc[0])
-
-print(
-    f"\nAfter handling missing values: {X.isnull().sum().sum()} missing values remain")
-
-print("\n3. ENCODING CATEGORICAL VARIABLES")
-print("-" * 80)
-print(f"Categorical features to encode: {len(categorical_cols)}")
+print(f"Categorical features: {len(categorical_cols)}")
+print(f"Numerical features: {len(numerical_cols)}")
 
 # One-hot encoding for categorical features
-X_encoded = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
-print(f"Features after encoding: {X_encoded.shape[1]}")
-print(f"New shape: {X_encoded.shape}")
+print("Applying one-hot encoding...")
+X_train_encoded = pd.get_dummies(
+    X_train, columns=categorical_cols, drop_first=True)
+X_test_encoded = pd.get_dummies(
+    X_test, columns=categorical_cols, drop_first=True)
 
-print("\n4. FEATURE SCALING (NORMALIZATION)")
+# Ensure both have same columns
+missing_cols = set(X_train_encoded.columns) - set(X_test_encoded.columns)
+for col in missing_cols:
+    X_test_encoded[col] = 0
+
+X_test_encoded = X_test_encoded[X_train_encoded.columns]
+
+print(f"✓ Features after encoding: {X_train_encoded.shape[1]}")
+print(f"  Training shape: {X_train_encoded.shape}")
+print(f"  Test shape: {X_test_encoded.shape}")
+
+print("\n3. FEATURE SCALING (NORMALIZATION)")
 print("-" * 80)
 
 # Standardize features
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X_encoded)
-X_scaled = pd.DataFrame(X_scaled, columns=X_encoded.columns)
+X_train_scaled = scaler.fit_transform(X_train_encoded)
+X_test_scaled = scaler.transform(X_test_encoded)
 
-print("Scaling applied using StandardScaler:")
+X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train_encoded.columns)
+X_test_scaled = pd.DataFrame(X_test_scaled, columns=X_test_encoded.columns)
+
+print("✓ Scaling applied using StandardScaler:")
 print("  Formula: (X - mean) / std_dev")
 print(f"\nSample statistics after scaling:")
-print(f"  Mean: {X_scaled.mean().mean():.6f} (should be ~0)")
-print(f"  Std Dev: {X_scaled.std().mean():.6f} (should be ~1)")
+print(f"  Mean: {X_train_scaled.mean().mean():.6f} (should be ~0)")
+print(f"  Std Dev: {X_train_scaled.std().mean():.6f} (should be ~1)")
 
-print("\n5. TRAIN-TEST SPLIT")
-print("-" * 80)
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X_scaled, y, test_size=0.2, random_state=42
-)
-
-print(
-    f"Training set: {X_train.shape[0]} samples ({X_train.shape[0]/len(X_scaled)*100:.1f}%)")
-print(
-    f"Test set: {X_test.shape[0]} samples ({X_test.shape[0]/len(X_scaled)*100:.1f}%)")
-print(f"Features: {X_train.shape[1]}")
+print(f"\nPrepared data shapes:")
+print(f"  Training features: {X_train_scaled.shape}")
+print(f"  Test features: {X_test_scaled.shape}")
+print(f"  Target: {y_train.shape}")
 
 print("\n6. ALGORITHM SELECTION: SEQUENTIAL NEURAL NETWORK")
 print("-" * 80)
@@ -174,25 +182,22 @@ Example Loss Progression:
 This represents ~97% improvement in prediction accuracy!
 """)
 
-print("\n10. DATA PREPARATION SUMMARY")
+print("\n4. DATA PREPARATION SUMMARY")
 print("-" * 80)
 print(f"""
 ✓ Loaded {len(train_data)} training samples
-✓ Removed {len(cols_to_drop)} features with excessive missing values
-✓ Handled missing values in remaining features
+✓ Handled missing values in all features
 ✓ Encoded {len(categorical_cols)} categorical features
 ✓ Applied StandardScaler normalization
-✓ Split into {len(X_train)} training and {len(X_test)} test samples
-✓ Selected Sequential Neural Network model
-✓ Configured with Adam optimizer and MSE loss
-✓ Ready for training!
+✓ Prepared {len(X_train_scaled)} training and {len(X_test_scaled)} test samples
+✓ Ready for model training!
 """)
 
 # Create visualization
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 # Plot 1: Feature distribution before scaling
-axes[0, 0].hist(X_encoded.iloc[:, 0], bins=30,
+axes[0, 0].hist(X_train_encoded.iloc[:, 0], bins=30,
                 color='skyblue', edgecolor='black')
 axes[0, 0].set_title('Feature Distribution (Before Scaling)',
                      fontsize=12, fontweight='bold')
@@ -200,7 +205,7 @@ axes[0, 0].set_xlabel('Feature Value')
 axes[0, 0].set_ylabel('Frequency')
 
 # Plot 2: Feature distribution after scaling
-axes[0, 1].hist(X_scaled.iloc[:, 0], bins=30,
+axes[0, 1].hist(X_train_scaled.iloc[:, 0], bins=30,
                 color='lightgreen', edgecolor='black')
 axes[0, 1].set_title('Feature Distribution (After Scaling)',
                      fontsize=12, fontweight='bold')
@@ -208,7 +213,7 @@ axes[0, 1].set_xlabel('Scaled Feature Value')
 axes[0, 1].set_ylabel('Frequency')
 
 # Plot 3: Target variable distribution
-axes[1, 0].hist(y, bins=50, color='coral', edgecolor='black')
+axes[1, 0].hist(y_train, bins=50, color='coral', edgecolor='black')
 axes[1, 0].set_title('Target Variable Distribution (SalePrice)',
                      fontsize=12, fontweight='bold')
 axes[1, 0].set_xlabel('Sale Price ($)')
@@ -216,8 +221,8 @@ axes[1, 0].set_ylabel('Frequency')
 
 # Plot 4: Train-Test Split
 split_data = pd.Series({
-    'Training Set': len(X_train),
-    'Test Set': len(X_test)
+    'Training Set': len(X_train_scaled),
+    'Test Set': len(X_test_scaled)
 })
 axes[1, 1].pie(split_data, labels=split_data.index,
                autopct='%1.1f%%', colors=['lightblue', 'lightcoral'])
@@ -229,5 +234,30 @@ plt.savefig('04_Outputs/visualizations/Group_B_Data_Preparation.png',
 print("\n✓ Visualization saved as '04_Outputs/visualizations/Group_B_Data_Preparation.png'")
 
 print("\n" + "=" * 80)
+print("SAVING PREPARED DATA FOR GROUP C")
+print("=" * 80)
+
+# Save prepared data
+print("\nSaving prepared datasets...")
+
+# Save as CSV
+X_train_scaled.to_csv('02_Data/processed/X_train_prepared.csv', index=False)
+X_test_scaled.to_csv('02_Data/processed/X_test_prepared.csv', index=False)
+y_train.to_csv('02_Data/processed/y_train.csv', index=False)
+
+# Save scaler for later use
+with open('02_Data/processed/scaler.pkl', 'wb') as f:
+    pickle.dump(scaler, f)
+
+print(f"✓ X_train_prepared.csv saved ({X_train_scaled.shape})")
+print(f"✓ X_test_prepared.csv saved ({X_test_scaled.shape})")
+print(f"✓ y_train.csv saved ({y_train.shape})")
+print(f"✓ scaler.pkl saved (for future predictions)")
+
+print("\n" + "=" * 80)
 print("GROUP B PREPARATION COMPLETE")
 print("=" * 80)
+print("\n✓ Data is ready for Group C (Model Training)")
+print(f"  - Features: {X_train_scaled.shape[1]}")
+print(f"  - Training samples: {X_train_scaled.shape[0]}")
+print(f"  - Test samples: {X_test_scaled.shape[0]}")
